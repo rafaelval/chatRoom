@@ -11,9 +11,17 @@ export const Chat = () => {
   const [messages, setMessages] = useState([]);
   const [message, setMessage] = useState("");
   const [users, setUsers] = useState([]);
-  const [privateChats, setPrivateChats] = useState({});
-  const [activeTab, setActiveTab] = useState("general"); // Manejo de pestañas
+  const [privateChats, setPrivateChats] = useState(() => {
+    return JSON.parse(localStorage.getItem("privateChats")) || {};
+  });
+  const [activeTab, setActiveTab] = useState("general");
+  const [openTabs, setOpenTabs] = useState([]); // Nuevo estado para manejar pestañas abiertas
   const messagesEndRef = useRef(null);
+
+  // Guardar en localStorage cada vez que privateChats cambie
+  useEffect(() => {
+    localStorage.setItem("privateChats", JSON.stringify(privateChats));
+  }, [privateChats]);
 
   useEffect(() => {
     if (isAuthenticated && user) {
@@ -22,51 +30,76 @@ export const Chat = () => {
       socket.on("updateUsers", (usersList) => setUsers(usersList));
       socket.on("messageResponse", (data) => setMessages((prev) => [...prev, data]));
       socket.on("privateMessageResponse", ({ from, message }) => {
-        setPrivateChats((prevChats) => ({
-          ...prevChats,
-          [from]: [...(prevChats[from] || []), { sender: from, message }],
-        }));
+        setPrivateChats((prevChats) => {
+          const updatedChats = {
+            ...prevChats,
+            [from]: [...(prevChats[from] || []), { sender: from, message }],
+          };
+          return updatedChats;
+        });
+
+        // Abrir automáticamente la pestaña si no está abierta
+        if (!openTabs.includes(from)) {
+          setOpenTabs((prevTabs) => [...prevTabs, from]);
+        }
+      });
+
+      // Escuchar evento para abrir pestaña de chat
+      socket.on("openPrivateChat", (sender) => {
+        if (!openTabs.includes(sender)) {
+          setOpenTabs((prevTabs) => [...prevTabs, sender]);
+        }
+        setActiveTab(sender); // Cambiar a la pestaña del remitente
       });
 
       return () => {
         socket.off("messageResponse");
         socket.off("privateMessageResponse");
         socket.off("updateUsers");
+        socket.off("openPrivateChat");
       };
     }
-  }, [isAuthenticated, user]);
-
-  const sendMessage = (e) => {
-    e.preventDefault();
-    if (message.trim() !== "" && user) {
-      socket.emit("message", { text: message, name: user.name });
-      setMessage("");
-    }
-  };
+  }, [isAuthenticated, user, openTabs]);
 
   const sendPrivateMessage = (recipient, privateMessage) => {
+    if (!privateMessage.trim()) return;
+    
     socket.emit("privateMessage", { to: recipient, message: privateMessage, from: user.name });
-    setPrivateChats((prevChats) => ({
-      ...prevChats,
-      [recipient]: [...(prevChats[recipient] || []), { sender: user.name, message: privateMessage }],
-    }));
-  };
-
-  const openPrivateChat = (recipient) => {
-    if (!privateChats[recipient]) {
-      setPrivateChats((prevChats) => ({ ...prevChats, [recipient]: [] }));
-    }
-    setActiveTab(recipient); // Activar la pestaña del chat seleccionado
-  };
-
-  const closeChat = (recipient) => {
     setPrivateChats((prevChats) => {
-      const updatedChats = { ...prevChats };
-      delete updatedChats[recipient];
+      const updatedChats = {
+        ...prevChats,
+        [recipient]: [...(prevChats[recipient] || []), { sender: user.name, message: privateMessage }],
+      };
       return updatedChats;
     });
 
-    setActiveTab("general"); // Volver al chat general si se cierra una pestaña
+    // Notificar al receptor para que abra la pestaña de chat
+    socket.emit("openPrivateChat", { recipient, sender: user.name });
+
+    setMessage("");
+  };
+
+  const openPrivateChat = (recipient) => {
+    setPrivateChats((prevChats) => ({
+      ...prevChats,
+      [recipient]: prevChats[recipient] || [], // Asegurar que se cree el chat aunque esté vacío
+    }));
+    setOpenTabs((prevTabs) => [...new Set([...prevTabs, recipient])]); // Añadir la pestaña a las abiertas
+    setActiveTab(recipient);
+  };
+
+  const closePrivateChat = (recipient) => {
+    setOpenTabs((prevTabs) => prevTabs.filter(tab => tab !== recipient)); // Cerrar la pestaña
+
+    // Si la pestaña activa es la que se cierra, volver a "general"
+    if (activeTab === recipient) {
+      setActiveTab("general");
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("privateChats"); // Borrar chats al cerrar sesión
+    logout({ returnTo: url });
   };
 
   if (isLoading) return <p>Cargando...</p>;
@@ -78,7 +111,7 @@ export const Chat = () => {
         <h1 className="text-white text-2xl">Chat General</h1>
         {isAuthenticated && (
           <button
-            onClick={() => logout({ returnTo: url })}
+            onClick={handleLogout}
             className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
           >
             Cerrar Sesión
@@ -90,8 +123,7 @@ export const Chat = () => {
         {/* Contenedor principal del chat */}
         <div className="flex-1 bg-gray-50 p-4 overflow-hidden flex flex-col">
           {/* Pestañas de Chats */}
-          <div className="flex border-b">
-            {/* Pestaña del Chat General */}
+          <div className="flex border-b space-x-2">
             <button
               className={`px-4 py-2 ${
                 activeTab === "general" ? "bg-gray-200 font-bold" : "bg-white"
@@ -101,22 +133,24 @@ export const Chat = () => {
               Chat General
             </button>
 
-            {/* Pestañas de Chats Privados */}
-            {Object.keys(privateChats).map((recipient) => (
+            {openTabs.map((recipient) => (
               <div key={recipient} className="flex items-center">
                 <button
                   className={`px-4 py-2 ${
                     activeTab === recipient ? "bg-gray-200 font-bold" : "bg-white"
-                  } border-t border-l border-r rounded-t`}
+                  } border-t border-l border-r rounded-t flex items-center`}
                   onClick={() => setActiveTab(recipient)}
                 >
                   {recipient}
-                </button>
-                <button
-                  className="ml-1 text-red-500"
-                  onClick={() => closeChat(recipient)}
-                >
-                  ✕
+                  <span
+                    className="ml-2 text-red-500 cursor-pointer hover:text-red-700"
+                    onClick={(e) => {
+                      e.stopPropagation(); // Evitar cambio de pestaña al hacer clic en la "X"
+                      closePrivateChat(recipient);
+                    }}
+                  >
+                    ✖
+                  </span>
                 </button>
               </div>
             ))}
@@ -124,7 +158,6 @@ export const Chat = () => {
 
           {/* Contenido de las pestañas */}
           <div className="flex-1 overflow-y-auto p-2">
-            {/* Mensajes del Chat General */}
             {activeTab === "general" && (
               <>
                 {messages.map((msg, index) => (
@@ -137,7 +170,6 @@ export const Chat = () => {
               </>
             )}
 
-            {/* Mensajes de Chats Privados */}
             {activeTab !== "general" && privateChats[activeTab] && (
               <>
                 {privateChats[activeTab].map((msg, index) => (
@@ -164,23 +196,15 @@ export const Chat = () => {
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  if (activeTab === "general") {
-                    sendMessage(e);
-                  } else {
-                    sendPrivateMessage(activeTab, message);
-                    setMessage("");
-                  }
+                if (e.key === "Enter" && activeTab !== "general") {
+                  sendPrivateMessage(activeTab, message);
                 }
               }}
             />
             <button
-              onClick={(e) => {
-                if (activeTab === "general") {
-                  sendMessage(e);
-                } else {
+              onClick={() => {
+                if (activeTab !== "general") {
                   sendPrivateMessage(activeTab, message);
-                  setMessage("");
                 }
               }}
               className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"

@@ -42,7 +42,7 @@ export const Chat = () => {
     }
   }, [messages, privateChats]);
 
-  if (isLoading) return <p>Cargando...</p>;
+  if (isLoading && !user) return <p>Cargando...</p>;
 
   return (
     <div className="h-screen w-screen flex flex-col">
@@ -63,7 +63,7 @@ export const Chat = () => {
         {/* Contenedor principal del chat */}
         <div className="flex-1 bg-gray-50 p-4 flex flex-col overflow-hidden">
           {/* Pestañas de Chats */}
-          <div className="flex border-b space-x-2">
+          <div className="flex flex-wrap border-b space-x-2">
             <button
               className={`px-4 py-2 ${
                 activeTab === "general" ? "bg-gray-200 font-bold" : "bg-white"
@@ -74,10 +74,12 @@ export const Chat = () => {
             </button>
 
             {openTabs.map((recipient) => (
-              <div key={recipient} className="flex items-center">
+              <div key={recipient} className="flex items-center mb-2 ">
                 <button
                   className={`px-4 py-2 ${
-                    activeTab === recipient ? "bg-gray-200 font-bold" : "bg-white"
+                    activeTab === recipient
+                      ? "bg-gray-200 font-bold"
+                      : "bg-white"
                   } border-t border-l border-r rounded-t flex items-center`}
                   onClick={() => setActiveTab(recipient)}
                 >
@@ -86,7 +88,12 @@ export const Chat = () => {
                     className="ml-2 text-red-500 cursor-pointer hover:text-red-700"
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleClosePrivateChat(recipient, closePrivateChat, activeTab, setActiveTab);
+                      handleClosePrivateChat(
+                        recipient,
+                        closePrivateChat,
+                        activeTab,
+                        setActiveTab
+                      );
                     }}
                   >
                     ✖
@@ -101,12 +108,16 @@ export const Chat = () => {
             {activeTab === "general" && (
               <>
                 {messages.map((msg, index) => (
-                  <div key={index} className="bg-gray-200 p-2 rounded-lg mb-2 max-w-[60%]">
+                  <div
+                    key={index}
+                    className="bg-gray-200 p-2 rounded-lg mb-2 max-w-[60%]"
+                  >
                     <strong>{msg.name}: </strong>
                     {msg.text}
                   </div>
                 ))}
-                <div ref={messagesEndRef} /> {/* Referencia para el final del contenedor */}
+                <div ref={messagesEndRef} />{" "}
+                {/* Referencia para el final del contenedor */}
               </>
             )}
 
@@ -116,14 +127,18 @@ export const Chat = () => {
                   <div
                     key={index}
                     className={`p-2 rounded-lg mb-2 ${
-                      msg.sender === user.name ? "bg-blue-200 text-right" : "bg-gray-200"
+                      msg.sender === user.name
+                        ? "bg-blue-200 text-right"
+                        : "bg-gray-200"
                     }`}
                   >
                     <strong>{msg.sender}: </strong>
-                    {msg.message} {/* Renderizar solo el mensaje, no el objeto completo */}
+                    {msg.message}{" "}
+                    {/* Renderizar solo el mensaje, no el objeto completo */}
                   </div>
                 ))}
-                <div ref={messagesEndRef} /> {/* Referencia para el final del contenedor */}
+                <div ref={messagesEndRef} />{" "}
+                {/* Referencia para el final del contenedor */}
               </>
             )}
           </div>
@@ -180,7 +195,11 @@ export const Chat = () => {
                   key={index}
                   className="p-2 bg-gray-200 rounded-lg mb-2 cursor-pointer hover:bg-gray-300"
                   onClick={() =>
-                    handleOpenPrivateChat(userName, openPrivateChat, setActiveTab)
+                    handleOpenPrivateChat(
+                      userName,
+                      openPrivateChat,
+                      setActiveTab
+                    )
                   }
                 >
                   {userName}

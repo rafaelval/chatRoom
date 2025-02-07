@@ -6,7 +6,7 @@ import {
   handleSendMessage,
   handleClosePrivateChat,
   handleOpenPrivateChat,
-} from "../utils/chatFunctions"; // Importar funciones
+} from "../utils/chatFunctions";
 
 export const Chat = () => {
   const { user, isAuthenticated, isLoading, handleLogout } = useAuth();
@@ -18,15 +18,13 @@ export const Chat = () => {
     closePrivateChat,
   } = usePrivateChats();
 
-  // Declarar setMessages antes de usarlo en useSocket
-  const [messages, setMessages] = useState([]); // Mensajes del chat general
-  const [users, setUsers] = useState([]); // Lista de usuarios conectados
-  const [message, setMessage] = useState(""); // Mensaje actual en el input
-  const [activeTab, setActiveTab] = useState("general"); // Pestaña activa
-  const messagesEndRef = useRef(null); // Referencia para el scroll automático
+  const [messages, setMessages] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [message, setMessage] = useState("");
+  const [activeTab, setActiveTab] = useState("general");
+  const messagesEndRef = useRef(null);
 
-  // Llamar a useSocket después de declarar setMessages
-  const { sendMessage } = useSocket(
+  const { sendMessage, sendFile } = useSocket(
     user,
     setMessages,
     setUsers,
@@ -35,12 +33,45 @@ export const Chat = () => {
     setActiveTab
   );
 
-  // Hacer scroll al final del contenedor de mensajes cuando se actualice la lista de mensajes
+  // Scroll al final del contenedor de mensajes
   useEffect(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages, privateChats]);
+
+  // Manejar la carga de archivos
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      sendFile(
+        activeTab === "general" ? "general" : "private",
+        activeTab,
+        file
+      );
+    }
+  };
+
+  // Función para renderizar archivos
+  const renderFile = (file, fileName) => {
+    if (file.startsWith("data:image")) {
+      // Es una imagen, mostrar vista previa
+      return (
+        <img
+          src={file}
+          alt={fileName}
+          className="max-w-full h-auto rounded-lg"
+        />
+      );
+    } else {
+      // Es otro tipo de archivo, mostrar enlace de descarga
+      return (
+        <a href={file} download={fileName} className="text-blue-500 underline">
+          Descargar {fileName}
+        </a>
+      );
+    }
+  };
 
   if (isLoading && !user) return <p>Cargando...</p>;
 
@@ -113,11 +144,10 @@ export const Chat = () => {
                     className="bg-gray-200 p-2 rounded-lg mb-2 max-w-[60%]"
                   >
                     <strong>{msg.name}: </strong>
-                    {msg.text}
+                    {msg.file ? renderFile(msg.file, msg.fileName) : msg.text}
                   </div>
                 ))}
-                <div ref={messagesEndRef} />{" "}
-                {/* Referencia para el final del contenedor */}
+                <div ref={messagesEndRef} />
               </>
             )}
 
@@ -133,12 +163,18 @@ export const Chat = () => {
                     }`}
                   >
                     <strong>{msg.sender}: </strong>
-                    {msg.message}{" "}
-                    {/* Renderizar solo el mensaje, no el objeto completo */}
+                    {msg.file ? (
+                      <img
+                        src={msg.file}
+                        alt={msg.fileName}
+                        className="max-w-full h-auto rounded-lg"
+                      />
+                    ) : (
+                      msg.message
+                    )}
                   </div>
                 ))}
-                <div ref={messagesEndRef} />{" "}
-                {/* Referencia para el final del contenedor */}
+                <div ref={messagesEndRef} />
               </>
             )}
           </div>
@@ -153,7 +189,8 @@ export const Chat = () => {
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") {
+                  if (e.key === "Enter" && message.trim()) {
+                    // Solo enviar si el mensaje no está vacío
                     handleSendMessage(
                       activeTab,
                       message,
@@ -165,6 +202,15 @@ export const Chat = () => {
                   }
                 }}
               />
+              {/* Botón para cargar archivos */}
+              <label className="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 cursor-pointer">
+                <input
+                  type="file"
+                  className="hidden"
+                  onChange={handleFileUpload}
+                />
+                📎
+              </label>
               <button
                 onClick={() =>
                   handleSendMessage(

@@ -11,14 +11,11 @@ export const usePrivateChats = () => {
     localStorage.setItem("privateChats", JSON.stringify(privateChats));
   }, [privateChats]);
 
-  const addMessageToPrivateChat = (recipient, sender, content) => {
+  const addMessageToPrivateChat = (recipient, sender, message) => {
     setPrivateChats((prevChats) => {
       const updatedChats = {
         ...prevChats,
-        [recipient]: [
-          ...(prevChats[recipient] || []),
-          { sender, ...content }, // Aquí se manejan tanto mensajes como archivos
-        ],
+        [recipient]: [...(prevChats[recipient] || []), { sender, message }],
       };
       return updatedChats;
     });
@@ -44,11 +41,5 @@ export const usePrivateChats = () => {
     }
   };
 
-  return {
-    privateChats,
-    openTabs,
-    addMessageToPrivateChat,
-    openPrivateChat,
-    closePrivateChat,
-  };
+  return { privateChats, openTabs, addMessageToPrivateChat, openPrivateChat, closePrivateChat };
 };
